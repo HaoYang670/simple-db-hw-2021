@@ -1,7 +1,6 @@
 package simpledb.storage;
 
 import java.io.Serializable;
-import java.util.Arrays;
 import java.util.Iterator;
 
 /**
@@ -12,6 +11,10 @@ import java.util.Iterator;
 public class Tuple implements Serializable {
 
     private static final long serialVersionUID = 1L;
+    
+    private TupleDesc schema;
+    private Field[] contents;
+    private RecordId rid;
 
     /**
      * Create a new tuple with the specified schema (type).
@@ -22,6 +25,9 @@ public class Tuple implements Serializable {
      */
     public Tuple(TupleDesc td) {
         // some code goes here
+        this.schema = td;
+        this.contents = new Field[td.numFields()];
+        this.rid = null;
     }
 
     /**
@@ -29,7 +35,7 @@ public class Tuple implements Serializable {
      */
     public TupleDesc getTupleDesc() {
         // some code goes here
-        return null;
+        return this.schema;
     }
 
     /**
@@ -38,7 +44,7 @@ public class Tuple implements Serializable {
      */
     public RecordId getRecordId() {
         // some code goes here
-        return null;
+        return this.rid;
     }
 
     /**
@@ -49,6 +55,7 @@ public class Tuple implements Serializable {
      */
     public void setRecordId(RecordId rid) {
         // some code goes here
+        this.rid = rid;
     }
 
     /**
@@ -61,6 +68,7 @@ public class Tuple implements Serializable {
      */
     public void setField(int i, Field f) {
         // some code goes here
+        this.contents[i] = f;
     }
 
     /**
@@ -71,7 +79,7 @@ public class Tuple implements Serializable {
      */
     public Field getField(int i) {
         // some code goes here
-        return null;
+        return this.contents[i];
     }
 
     /**
@@ -84,17 +92,41 @@ public class Tuple implements Serializable {
      */
     public String toString() {
         // some code goes here
-        throw new UnsupportedOperationException("Implement this");
+        String expression = "";
+
+        for(int i=0; i<contents.length; i++){
+            expression += contents[i].toString();
+
+            if(i != contents.length-1){
+                expression += "\t";
+            }
+        }
+        return expression;
     }
 
     /**
      * @return
      *        An iterator which iterates over all the fields of this tuple
      * */
-    public Iterator<Field> fields()
-    {
+    public Iterator<Field> fields(){
+
         // some code goes here
-        return null;
+        return new Iterator<Field>(){
+
+            int idx = 0;
+
+            @Override
+            public boolean hasNext() {
+                return idx < contents.length;
+            }
+
+            @Override
+            public Field next() {
+                Field f = contents[idx];
+                idx++;
+                return f;
+            }
+        };
     }
 
     /**
@@ -103,5 +135,6 @@ public class Tuple implements Serializable {
     public void resetTupleDesc(TupleDesc td)
     {
         // some code goes here
+        this.schema = td;
     }
 }
