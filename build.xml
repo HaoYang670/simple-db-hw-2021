@@ -15,7 +15,7 @@
     <property name="compile.debug" value="true"/>
     <property name="test.reports" location="testreport"/>
 
-    <property name="sourceversion" value="1.8"/>
+    <property name="sourceversion" value="11"/>
 
     <path id="classpath.base">
         <pathelement location="${build.src}"/>
@@ -45,9 +45,10 @@
             <mkdir dir="@{destdir}"/>
             <!-- avoids needing ant clean when changing interfaces -->
             <depend srcdir="@{srcdir}" destdir="@{destdir}" cache="${depcache}"/>
-            <javac srcdir="@{srcdir}" destdir="@{destdir}" includeAntRuntime="no"
+            <javac  srcdir="@{srcdir}" destdir="@{destdir}" includeAntRuntime="no"
                     debug="${compile.debug}" source="${sourceversion}">
                 <compilerarg value="-Xlint:unchecked" />
+                <compilerarg line="-encoding UTF-8 "/>
                 <!--<compilerarg value="-Xlint:deprecation" />-->
                 <compileoptions/>
             </javac>
