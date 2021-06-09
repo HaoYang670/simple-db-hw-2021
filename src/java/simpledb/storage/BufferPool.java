@@ -8,7 +8,7 @@ import simpledb.transaction.TransactionAbortedException;
 import simpledb.transaction.TransactionId;
 
 import java.io.*;
-
+import java.util.Map;
 import java.util.concurrent.ConcurrentHashMap;
 
 /**
@@ -33,6 +33,12 @@ public class BufferPool {
     constructor instead. */
     public static final int DEFAULT_PAGES = 50;
 
+    /** Max number of pages in this buffer pool. */
+    private int numPages;
+
+    /** All pages stored in this buffer pool. */
+    private Map<PageId, Page> pages; 
+
     /**
      * Creates a BufferPool that caches up to numPages pages.
      *
@@ -40,6 +46,8 @@ public class BufferPool {
      */
     public BufferPool(int numPages) {
         // some code goes here
+        this.numPages = numPages;
+        this.pages = new ConcurrentHashMap<PageId, Page>();
     }
     
     public static int getPageSize() {
@@ -74,7 +82,20 @@ public class BufferPool {
     public  Page getPage(TransactionId tid, PageId pid, Permissions perm)
         throws TransactionAbortedException, DbException {
         // some code goes here
-        return null;
+        Page requestedPage = null;
+
+        if (this.pages.containsKey(pid)){
+            requestedPage = this.pages.get(pid);
+        }
+        else if (this.pages.size() < this.numPages){
+            // read page from disk
+            requestedPage = Database.getCatalog().getDatabaseFile(pid.getTableId()).readPage(pid);
+            this.pages.put(pid, requestedPage);
+        }
+        else {
+            throw new DbException("Cannot save more than " + this.numPages + " pages in buffer.");
+        }
+        return requestedPage;
     }
 
     /**
