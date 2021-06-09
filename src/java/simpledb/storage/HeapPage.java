@@ -73,8 +73,10 @@ public class HeapPage implements Page {
     */
     private int getNumTuples() {        
         // some code goes here
-        return 0;
+        final int pageBits = BufferPool.getPageSize() * 8;
+        final int tupleBits = this.td.getSize() * 8 + 1;
 
+        return pageBits / tupleBits;
     }
 
     /**
@@ -84,8 +86,10 @@ public class HeapPage implements Page {
     private int getHeaderSize() {        
         
         // some code goes here
-        return 0;
-                 
+        final int headerBits = this.numSlots;
+
+        if(headerBits % 8 == 0) return headerBits / 8;
+        else return headerBits / 8 + 1;                 
     }
     
     /** Return a view of this page before it was modified
@@ -118,7 +122,7 @@ public class HeapPage implements Page {
      */
     public HeapPageId getId() {
     // some code goes here
-    throw new UnsupportedOperationException("implement this");
+        return this.pid;
     }
 
     /**
@@ -288,7 +292,13 @@ public class HeapPage implements Page {
      */
     public int getNumEmptySlots() {
         // some code goes here
-        return 0;
+        int empty = 0;
+
+        for(int i=0; i<this.numSlots; i++){
+            if(! this.isSlotUsed(i)) empty ++; 
+        }
+
+        return empty;
     }
 
     /**
@@ -296,7 +306,7 @@ public class HeapPage implements Page {
      */
     public boolean isSlotUsed(int i) {
         // some code goes here
-        return false;
+        return (this.header[i / 8] & (1 << (i % 8))) != 0;
     }
 
     /**
@@ -313,7 +323,27 @@ public class HeapPage implements Page {
      */
     public Iterator<Tuple> iterator() {
         // some code goes here
-        return null;
+        return new Iterator<Tuple>(){
+            private int slotIdx = 0;
+
+            @Override
+            public boolean hasNext() {
+                while(this.slotIdx < numSlots && (!isSlotUsed(this.slotIdx)) ){
+                    this.slotIdx ++;
+                }
+
+                return this.slotIdx < numSlots;
+            }
+
+            @Override
+            public Tuple next() {
+                // TODO Auto-generated method stub
+                Tuple t = tuples[this.slotIdx];
+                this.slotIdx ++;
+                return t;
+            }
+            
+        };
     }
 
 }
