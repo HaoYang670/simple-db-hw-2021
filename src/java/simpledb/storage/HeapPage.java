@@ -337,7 +337,6 @@ public class HeapPage implements Page {
 
             @Override
             public Tuple next() {
-                // TODO Auto-generated method stub
                 Tuple t = tuples[this.slotIdx];
                 this.slotIdx ++;
                 return t;
