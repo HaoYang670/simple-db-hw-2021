@@ -81,8 +81,9 @@ public class HeapFile implements DbFile {
         byte[] data = new byte[pageSize];
 
         try {
-            FileInputStream input = new FileInputStream(this.file);
-            input.read(data, offset, pageSize);
+            RandomAccessFile input = new RandomAccessFile(this.file, "r");
+            input.skipBytes(offset);
+            input.read(data);
             input.close();
             return new HeapPage( (HeapPageId) pid, data);
         } catch (Exception e) {
@@ -158,6 +159,7 @@ public class HeapFile implements DbFile {
                     if(this.pgNo >= this.pagesPerFile) return false;
                     this.open();
                 }
+                
                 return true;
             }
 
