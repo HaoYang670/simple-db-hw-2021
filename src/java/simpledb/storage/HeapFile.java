@@ -125,10 +125,9 @@ public class HeapFile implements DbFile {
     // see DbFile.java for javadocs
     public DbFileIterator iterator(TransactionId tid) {
         // some code goes here
-        
         return new DbFileIterator(){
             private final int pagesPerFile = numPages();
-            private final BufferPool buf = new BufferPool(this.pagesPerFile);
+            private final BufferPool buf = Database.getBufferPool();
             private Iterator<Tuple> tupleIter = null;
             /** page number of current opening heap page */
             private int pgNo = 0; 
