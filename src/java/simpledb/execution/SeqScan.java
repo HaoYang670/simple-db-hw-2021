@@ -1,10 +1,12 @@
 package simpledb.execution;
 
+import simpledb.common.Catalog;
 import simpledb.common.Database;
 import simpledb.transaction.TransactionAbortedException;
 import simpledb.transaction.TransactionId;
 import simpledb.common.Type;
 import simpledb.common.DbException;
+import simpledb.storage.DbFile;
 import simpledb.storage.DbFileIterator;
 import simpledb.storage.Tuple;
 import simpledb.storage.TupleDesc;
@@ -20,6 +22,10 @@ public class SeqScan implements OpIterator {
 
     private static final long serialVersionUID = 1L;
 
+    private final TransactionId tid;
+    private int tableid;
+    private String tableAlias;
+    private DbFileIterator iterator;
     /**
      * Creates a sequential scan over the specified table as a part of the
      * specified transaction.
@@ -38,6 +44,10 @@ public class SeqScan implements OpIterator {
      */
     public SeqScan(TransactionId tid, int tableid, String tableAlias) {
         // some code goes here
+        this.tid = tid;
+        this.tableid = tableid;
+        this.tableAlias = tableAlias;
+        this.iterator = null;
     }
 
     /**
@@ -46,16 +56,15 @@ public class SeqScan implements OpIterator {
      *       be the actual name of the table in the catalog of the database
      * */
     public String getTableName() {
-        return null;
+        return Database.getCatalog().getTableName(this.tableid);
     }
 
     /**
      * @return Return the alias of the table this operator scans.
      * */
-    public String getAlias()
-    {
+    public String getAlias(){
         // some code goes here
-        return null;
+        return this.tableAlias;
     }
 
     /**
@@ -72,6 +81,9 @@ public class SeqScan implements OpIterator {
      */
     public void reset(int tableid, String tableAlias) {
         // some code goes here
+        this.tableid = tableid;
+        this.tableAlias = tableAlias;
+        this.iterator = null;
     }
 
     public SeqScan(TransactionId tid, int tableId) {
@@ -80,6 +92,19 @@ public class SeqScan implements OpIterator {
 
     public void open() throws DbException, TransactionAbortedException {
         // some code goes here
+        // if no iterator, create new iterator
+        // else open the current iterator immediately
+        if(this.iterator == null){
+            DbFile file = Database.getCatalog().getDatabaseFile(this.tableid);
+            this.iterator = file.iterator(this.tid);
+            if(this.iterator == null){
+                throw new DbException("Cannot open file: " + this.getTableName());
+            }
+        }
+        else{
+            System.out.println(tid +": reuse iterator");
+        }
+        this.iterator.open();
     }
 
     /**
@@ -94,26 +119,45 @@ public class SeqScan implements OpIterator {
      */
     public TupleDesc getTupleDesc() {
         // some code goes here
-        return null;
+        final TupleDesc origin = Database.getCatalog().getTupleDesc(this.tableid);
+
+        String[] prefixedNames = new String[origin.numFields()];
+        Type[] types = new Type[origin.numFields()];
+
+        for(int i=0; i<origin.numFields(); i++){
+            prefixedNames[i] = this.tableAlias + "." + origin.getFieldName(i);
+            types[i] = origin.getFieldType(i);
+        }
+
+        return new TupleDesc(types, prefixedNames);
     }
 
     public boolean hasNext() throws TransactionAbortedException, DbException {
         // some code goes here
-        return false;
+        if(this.iterator == null) return false;
+        return this.iterator.hasNext();
     }
 
     public Tuple next() throws NoSuchElementException,
             TransactionAbortedException, DbException {
         // some code goes here
-        return null;
+        if(this.iterator == null){
+            throw new DbException("No file iterator open.");
+        }
+        return this.iterator.next();
     }
 
     public void close() {
         // some code goes here
+        this.iterator.close();
     }
 
     public void rewind() throws DbException, NoSuchElementException,
             TransactionAbortedException {
         // some code goes here
+        if(this.iterator == null){
+            throw new DbException("No file iterator open.");
+        }
+        this.iterator.rewind();
     }
 }
