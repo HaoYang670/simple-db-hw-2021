@@ -92,18 +92,14 @@ public class SeqScan implements OpIterator {
 
     public void open() throws DbException, TransactionAbortedException {
         // some code goes here
-        // if no iterator, create new iterator
-        // else open the current iterator immediately
+        // create new iterator
+        DbFile file = Database.getCatalog().getDatabaseFile(this.tableid);
+        this.iterator = file.iterator(this.tid);
+        
         if(this.iterator == null){
-            DbFile file = Database.getCatalog().getDatabaseFile(this.tableid);
-            this.iterator = file.iterator(this.tid);
-            if(this.iterator == null){
-                throw new DbException("Cannot open file: " + this.getTableName());
-            }
+            throw new DbException("Cannot open file: " + this.getTableName());
         }
-        else{
-            System.out.println(tid +": reuse iterator");
-        }
+
         this.iterator.open();
     }
 
