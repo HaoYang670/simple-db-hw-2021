@@ -20,6 +20,13 @@ public class Delete extends Operator {
 
     private static final long serialVersionUID = 1L;
 
+    private final BufferPool buffer;
+    private final TransactionId tid;
+    private final TupleDesc td;
+    private OpIterator child;
+    /* Whether the operator has been called before */
+    private boolean hasCalled;
+
     /**
      * Constructor specifying the transaction that this delete belongs to as
      * well as the child to read from.
@@ -31,23 +38,35 @@ public class Delete extends Operator {
      */
     public Delete(TransactionId t, OpIterator child) {
         // some code goes here
+        this.buffer = Database.getBufferPool();
+        this.tid = t;
+        this.child = child;
+        this.hasCalled = false;
+        // alway return the number of deleted tuples
+        this.td = new TupleDesc(new Type[] {Type.INT_TYPE});
     }
 
     public TupleDesc getTupleDesc() {
         // some code goes here
-        return null;
+        return this.td;
     }
 
     public void open() throws DbException, TransactionAbortedException {
         // some code goes here
+        this.child.open();
+        this.hasCalled = false;
+        super.open();
     }
 
     public void close() {
         // some code goes here
+        this.child.close();
+        super.close();
     }
 
     public void rewind() throws DbException, TransactionAbortedException {
         // some code goes here
+        this.child.rewind();
     }
 
     /**
@@ -61,7 +80,23 @@ public class Delete extends Operator {
      */
     protected Tuple fetchNext() throws TransactionAbortedException, DbException {
         // some code goes here
-        return null;
+        if(this.hasCalled) return null;
+        
+        this.hasCalled = true;
+        int deleted = 0;
+
+        while(this.child.hasNext()){
+            try {
+                buffer.deleteTuple(tid, child.next());
+                deleted ++;
+            } catch (Exception e) {
+                e.printStackTrace();
+            }
+        }
+
+        Tuple t = new Tuple(td);
+        t.setField(0, new IntField(deleted));
+        return t;
     }
 
     @Override
