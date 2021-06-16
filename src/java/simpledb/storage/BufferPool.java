@@ -88,14 +88,15 @@ public class BufferPool {
         if (this.pages.containsKey(pid)){
             requestedPage = this.pages.get(pid);
         }
-        else if (this.pages.size() < this.numPages){
+        else{
+            if (this.pages.size() >= this.numPages){
+                evictPage();
+            }
             // read page from disk
             requestedPage = Database.getCatalog().getDatabaseFile(pid.getTableId()).readPage(pid);
             this.pages.put(pid, requestedPage);
-        }
-        else {
-            throw new DbException("Cannot save more than " + this.numPages + " pages in buffer.");
-        }
+        } 
+
         return requestedPage;
     }
 
@@ -166,8 +167,7 @@ public class BufferPool {
 
         // update pages in buffer
         for(Page p : dirties){
-            p.markDirty(true, tid);
-            this.pages.put(p.getId(), p);
+            updatePage(p, tid);
         }
     }
 
@@ -194,9 +194,29 @@ public class BufferPool {
 
         // update pages in buffer
         for(Page p : dirties){
-            p.markDirty(true, tid);
-            this.pages.put(p.getId(), p);
+            updatePage(p, tid);
         }
+    }
+
+    /**
+     * Replace the existing version of page in buffer, 
+     * or add the page to buffer if it is not in buffer
+     * 
+     * @param page the page to be updated
+     * @param tid the transaction updating the page
+     */
+    private void updatePage(Page page, TransactionId tid){
+        PageId pid = page.getId();
+        page.markDirty(true, tid);
+
+        if(!pages.containsKey(pid) && (pages.size() >= this.numPages)){
+            try {
+                evictPage();
+            } catch (Exception e) {
+                e.printStackTrace();
+            }
+        }
+        pages.put(pid, page);
     }
 
     /**
@@ -207,20 +227,26 @@ public class BufferPool {
     public synchronized void flushAllPages() throws IOException {
         // some code goes here
         // not necessary for lab1
-
+        for(PageId pid : pages.keySet()){
+            flushPage(pid);
+        }
     }
 
-    /** Remove the specific page id from the buffer pool.
+    /** <p>Remove the specific page id from the buffer pool.
         Needed by the recovery manager to ensure that the
         buffer pool doesn't keep a rolled back page in its
         cache.
+
+        <p>Remove a page from the buffer pool 
+        without flushing it to disk
         
-        Also used by B+ tree files to ensure that deleted pages
+        <p>Also used by B+ tree files to ensure that deleted pages
         are removed from the cache so they can be reused safely
     */
     public synchronized void discardPage(PageId pid) {
         // some code goes here
         // not necessary for lab1
+        this.pages.remove(pid);
     }
 
     /**
@@ -230,6 +256,8 @@ public class BufferPool {
     private synchronized  void flushPage(PageId pid) throws IOException {
         // some code goes here
         // not necessary for lab1
+        DbFile table = Database.getCatalog().getDatabaseFile(pid.getTableId());
+        table.writePage(pages.get(pid));
     }
 
     /** Write all pages of the specified transaction to disk.
@@ -246,6 +274,27 @@ public class BufferPool {
     private synchronized  void evictPage() throws DbException {
         // some code goes here
         // not necessary for lab1
+
+        // randomly choose a not dirty page to evict
+        // if all pages are dirty, randomly choose one
+        PageId evictedPid = null;
+        boolean isDirty = true;
+
+        for(PageId pid : this.pages.keySet()){
+            if(pages.get(pid).isDirty() == null){
+                evictedPid = pid;
+                isDirty = false;
+                break;
+            }
+            else evictedPid = pid;
+        }
+
+        try {
+            if(isDirty) flushPage(evictedPid);
+            discardPage(evictedPid);
+        } catch (Exception e) {
+            e.printStackTrace();
+        }
     }
 
 }
