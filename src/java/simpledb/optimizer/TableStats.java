@@ -4,8 +4,10 @@ import simpledb.common.Database;
 import simpledb.common.Type;
 import simpledb.execution.Predicate;
 import simpledb.execution.SeqScan;
+import simpledb.execution.Predicate.Op;
 import simpledb.storage.*;
 import simpledb.transaction.Transaction;
+import simpledb.transaction.TransactionId;
 
 import java.util.HashMap;
 import java.util.Iterator;
@@ -68,6 +70,11 @@ public class TableStats {
      */
     static final int NUM_HIST_BINS = 100;
 
+    private final DbFile file;
+    private final double ioCostPerPage;
+    private final int numTuples;
+    private final IntHistogram[] intHists;
+    private final StringHistogram[] strHists;
     /**
      * Create a new TableStats object, that keeps track of statistics on each
      * column of a table
@@ -87,6 +94,38 @@ public class TableStats {
         // necessarily have to (for example) do everything
         // in a single scan of the table.
         // some code goes here
+        file = Database.getCatalog().getDatabaseFile(tableid);
+        final int nfields = file.getTupleDesc().numFields();
+
+        this.ioCostPerPage = ioCostPerPage;
+        Field[] max = new Field[nfields];
+        Field[] min = new Field[nfields];
+        this.intHists = new IntHistogram[nfields];
+        this.strHists = new StringHistogram[nfields];
+        
+
+        final DbFileIterator iterator = file.iterator(new TransactionId());
+        int ntups = 0;
+
+        try {
+            iterator.open();
+            while(iterator.hasNext()){
+                ntups ++;
+                Tuple next = iterator.next();
+
+                for(int fId=0; fId<max.length; fId++){
+                    Field f = next.getField(fId);
+                    if(max[fId] == null || f.compare(Op.GREATER_THAN, max[fId])) max[fId] = f;
+                    if(min[fId] == null || f.compare(Op.LESS_THAN, min[fId])) min[fId] = f; 
+                }
+            }
+            iterator.close();
+        } catch (Exception e) {
+            e.printStackTrace();
+        }
+
+        this.numTuples = ntups;
+        createHistograms(max, min);
     }
 
     /**
@@ -103,7 +142,7 @@ public class TableStats {
      */
     public double estimateScanCost() {
         // some code goes here
-        return 0;
+        return this.ioCostPerPage * file.numPages();
     }
 
     /**
@@ -117,7 +156,7 @@ public class TableStats {
      */
     public int estimateTableCardinality(double selectivityFactor) {
         // some code goes here
-        return 0;
+        return (int) (this.numTuples * selectivityFactor);
     }
 
     /**
@@ -132,7 +171,12 @@ public class TableStats {
      * */
     public double avgSelectivity(int field, Predicate.Op op) {
         // some code goes here
-        return 1.0;
+        if(file.getTupleDesc().getFieldType(field) == Type.INT_TYPE){
+            return intHists[field].avgSelectivity();
+        }
+        else{
+            return strHists[field].avgSelectivity();
+        }
     }
 
     /**
@@ -150,15 +194,58 @@ public class TableStats {
      */
     public double estimateSelectivity(int field, Predicate.Op op, Field constant) {
         // some code goes here
-        return 1.0;
+        
+        if(constant.getType() == Type.INT_TYPE){
+            return intHists[field].estimateSelectivity(op, ((IntField)constant).getValue());
+        }
+        else{
+            return strHists[field].estimateSelectivity(op, ((StringField)constant).getValue());
+        }
     }
 
+    /**
+     * Second scan of the file, create histogram for all fields
+     */
+    private void createHistograms(Field[] max, Field[] min){
+        DbFileIterator iterator = file.iterator(new TransactionId());
+        TupleDesc td = file.getTupleDesc();
+
+        // initial histogram based on max, min values
+        for(int i=0; i<td.numFields(); i++){
+            if(td.getFieldType(i) == Type.INT_TYPE) {
+                intHists[i] = new IntHistogram(NUM_HIST_BINS, 
+                                               ((IntField)min[i]).getValue(), 
+                                               ((IntField)max[i]).getValue());
+            }
+            else 
+                strHists[i] = new StringHistogram(NUM_HIST_BINS);
+        }
+
+        try {
+            iterator.open();
+            while(iterator.hasNext()){
+                Tuple next = iterator.next();
+
+                for(int i=0; i<td.numFields(); i++){
+                    Field f = next.getField(i);
+
+                    if(td.getFieldType(i) == Type.INT_TYPE) 
+                        intHists[i].addValue(((IntField)f).getValue());
+                    else 
+                        strHists[i].addValue(((StringField)f).getValue());
+                }
+            }
+            iterator.close();
+
+        } catch (Exception e) {
+            e.printStackTrace();
+        }
+    }
     /**
      * return the total number of tuples in this table
      * */
     public int totalTuples() {
         // some code goes here
-        return 0;
+        return numTuples;
     }
-
 }

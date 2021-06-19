@@ -93,4 +93,10 @@ public interface DbFile {
      * @return TupleDesc of this DbFile.
      */
     TupleDesc getTupleDesc();
+
+    /**
+     * My change to the DbFile interface
+     * @return the number of pages in the file.
+     */
+    int numPages();
 }

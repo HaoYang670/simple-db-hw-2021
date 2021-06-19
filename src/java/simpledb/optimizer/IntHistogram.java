@@ -63,10 +63,13 @@ public class IntHistogram {
         if(v < min) greaterThan = 1.0;
         else if(v <= max){
             final int idx = getIdx(v);
-            // inclusive
-            final int higherBound = (int) (width * (idx+1));
+            // the smallest integer in the bucket
+            final double lowerBound = Math.ceil(width * idx);
+            // the largest integer in the bucket
+            final double higherBound = Math.floor(width * (idx+1));
+
             final double numVals = (double) getNumVals();
-            equal = (buckets[idx] / width) / numVals;
+            equal = (buckets[idx] / (higherBound - lowerBound + 1)) / numVals;
     
             greaterThan = equal * (higherBound - v);
             for(int i=idx+1; i<buckets.length; i++){
@@ -87,6 +90,7 @@ public class IntHistogram {
     }
 
     /**
+     * lower bound is inclusive, higher bound is exclusive
      * @param v Value
      * @return the index of bucket that v belongs to.
      */
