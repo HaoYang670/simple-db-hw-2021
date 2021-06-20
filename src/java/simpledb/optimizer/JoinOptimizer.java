@@ -247,8 +247,31 @@ public class JoinOptimizer {
             throws ParsingException {
 
         // some code goes here
-        //Replace the following
-        return joins;
+        PlanCache optJoins = new PlanCache();
+        
+        for(int size=1; size<=this.joins.size(); size++){            
+            for(Set<LogicalJoinNode> subJoins : enumerateSubsets(this.joins, size)){
+                CostCard bestPlan = new CostCard();
+                bestPlan.card = 0;
+                bestPlan.cost = Double.MAX_VALUE;
+                bestPlan.plan = null;
+
+                for(LogicalJoinNode joinToRemove : subJoins){
+                    CostCard plan = computeCostAndCardOfSubplan(stats, filterSelectivities, joinToRemove, subJoins, bestPlan.cost, optJoins);
+                    if(plan != null){
+                        bestPlan = plan;
+                    }
+                }
+                optJoins.addPlan(subJoins, bestPlan.cost, bestPlan.card, bestPlan.plan);
+            }
+        }
+        
+        List<LogicalJoinNode> finalOrder = optJoins.getOrder(new HashSet<LogicalJoinNode>(this.joins));
+        
+        if(explain) 
+            printJoins(finalOrder, optJoins, stats, filterSelectivities);
+
+        return finalOrder;
     }
 
     // ===================== Private Methods =================================
