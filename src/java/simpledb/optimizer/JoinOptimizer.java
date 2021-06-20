@@ -216,10 +216,50 @@ public class JoinOptimizer {
             }
             els = newels;
         }
-
         return els;
-
     }
+
+    public <T> Iterator<Set<T>> subsetsIter(List<T> v, int size){
+        return new Iterator<Set<T>>(){
+            // boundary condition: when size == 0, only return empty set
+            private boolean hasEmptySet = true;
+            // subsets with size == size-1, not containing the head element
+            private Iterator<Set<T>> tail = null;
+            // subsets with size == size, but not containing the head element
+            private Iterator<Set<T>> noHead = null;
+
+            public boolean hasNext() {
+                // boundary 1: cannot generate a larger set from a smaller list
+                if(size > v.size()) return false;
+                // boundary 2: empty set (size always 0)
+                else if(size == 0) return hasEmptySet;
+                else{
+                    if (tail == null) tail = subsetsIter(v.subList(1, v.size()), size-1);
+                    if (noHead == null) noHead = subsetsIter(v.subList(1, v.size()), size);
+                    return tail.hasNext() || noHead.hasNext();
+                }
+            }
+
+            public Set<T> next() {
+                if(size == 0 && hasEmptySet){
+                    hasEmptySet = false;
+                    return new HashSet<>();
+                }
+                else if(size > 0 && tail.hasNext()){
+                    Set<T> remains = tail.next();
+                    remains.add(v.get(0));
+                    return remains;
+                }
+                else if(size > 0 && noHead.hasNext()){
+                    return noHead.next();
+                }
+                else{
+                    return null;
+                }
+            }
+        };
+    }
+
 
     /**
      * Compute a logical, reasonably efficient join on the specified tables. See
@@ -249,8 +289,11 @@ public class JoinOptimizer {
         // some code goes here
         PlanCache optJoins = new PlanCache();
         
-        for(int size=1; size<=this.joins.size(); size++){            
-            for(Set<LogicalJoinNode> subJoins : enumerateSubsets(this.joins, size)){
+        for(int size=1; size<=this.joins.size(); size++){  
+            Iterator<Set<LogicalJoinNode>> subsets = subsetsIter(this.joins, size);  
+                    
+            while(subsets.hasNext()){
+                Set<LogicalJoinNode> subJoins = subsets.next();
                 CostCard bestPlan = new CostCard();
                 bestPlan.card = 0;
                 bestPlan.cost = Double.MAX_VALUE;
