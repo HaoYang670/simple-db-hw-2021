@@ -130,7 +130,7 @@ public class JoinOptimizer {
             // HINT: You may need to use the variable "j" if you implemented
             // a join algorithm that's more complicated than a basic
             // nested-loops join.
-            return -1.0;
+            return cost1 + card1*cost2 + card1*card2;
         }
     }
 
@@ -174,9 +174,19 @@ public class JoinOptimizer {
                                                    String field2PureName, int card1, int card2, boolean t1pkey,
                                                    boolean t2pkey, Map<String, TableStats> stats,
                                                    Map<String, Integer> tableAliasToId) {
-        int card = 1;
         // some code goes here
-        return card <= 0 ? 1 : card;
+        // If no primary key: 
+        // make up a heuristic (the size of the larger of the two tables).
+        int equal = Math.max(card1, card2);
+        if(t1pkey) equal = Math.min(equal, card2);
+        if(t2pkey) equal = Math.min(equal, card1);
+        
+        switch (joinOp) {
+            case LIKE:
+            case EQUALS: return equal;
+            case NOT_EQUALS: return card1 * card2 - equal;
+            default: return Math.max(Math.max(card1, card2), (int) (card1*card2*0.3));
+        }
     }
 
     /**
