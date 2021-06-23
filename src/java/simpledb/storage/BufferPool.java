@@ -4,8 +4,11 @@ import simpledb.common.Database;
 import simpledb.common.Permissions;
 import simpledb.common.DbException;
 import simpledb.common.DeadlockException;
+import simpledb.transaction.LockManager;
+import simpledb.transaction.LockType;
 import simpledb.transaction.TransactionAbortedException;
 import simpledb.transaction.TransactionId;
+
 
 import java.io.*;
 import java.util.List;
@@ -40,6 +43,8 @@ public class BufferPool {
     /** All pages stored in this buffer pool. */
     private Map<PageId, Page> pages; 
 
+    /** all 2PL in the buffer pool */
+    private LockManager lockManager;
     /**
      * Creates a BufferPool that caches up to numPages pages.
      *
@@ -49,6 +54,7 @@ public class BufferPool {
         // some code goes here
         this.numPages = numPages;
         this.pages = new ConcurrentHashMap<PageId, Page>();
+        this.lockManager = new LockManager();
     }
     
     public static int getPageSize() {
@@ -80,9 +86,10 @@ public class BufferPool {
      * @param pid the ID of the requested page
      * @param perm the requested permissions on the page
      */
-    public  Page getPage(TransactionId tid, PageId pid, Permissions perm)
+    public Page getPage(TransactionId tid, PageId pid, Permissions perm)
         throws TransactionAbortedException, DbException {
         // some code goes here
+        lockManager.getLock(tid, pid, getLockType(perm));
         Page requestedPage = null;
 
         if (this.pages.containsKey(pid)){
@@ -112,6 +119,7 @@ public class BufferPool {
     public  void unsafeReleasePage(TransactionId tid, PageId pid) {
         // some code goes here
         // not necessary for lab1|lab2
+        lockManager.releaseLock(pid, tid);
     }
 
     /**
@@ -125,10 +133,10 @@ public class BufferPool {
     }
 
     /** Return true if the specified transaction has a lock on the specified page */
-    public boolean holdsLock(TransactionId tid, PageId p) {
+    public boolean holdsLock(TransactionId tid, PageId pid) {
         // some code goes here
         // not necessary for lab1|lab2
-        return false;
+        return lockManager.holdsLock(tid, pid);
     }
 
     /**
@@ -163,6 +171,7 @@ public class BufferPool {
         // some code goes here
         // not necessary for lab1
         DbFile file = Database.getCatalog().getDatabaseFile(tableId);
+        // exclusive lock is acquired here
         List<Page> dirties = file.insertTuple(tid, t);
 
         // update pages in buffer
@@ -190,6 +199,7 @@ public class BufferPool {
         // not necessary for lab1
         int tableId = t.getRecordId().getPageId().getTableId();
         DbFile file = Database.getCatalog().getDatabaseFile(tableId);
+        // exclusive lock is acquired here
         List<Page> dirties = file.deleteTuple(tid, t);
 
         // update pages in buffer
@@ -295,6 +305,11 @@ public class BufferPool {
         } catch (Exception e) {
             e.printStackTrace();
         }
+    }
+
+    private static LockType getLockType(Permissions perm){
+        if(perm == Permissions.READ_ONLY) return LockType.SHARED;
+        else return LockType.EXCLUSIVE;
     }
 
 }
