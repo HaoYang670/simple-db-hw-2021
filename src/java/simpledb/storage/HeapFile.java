@@ -119,14 +119,16 @@ public class HeapFile implements DbFile {
         BufferPool buf = Database.getBufferPool();
         HeapPage dirtyPage = null;
         // find page that hs empty slot
-        for(int pageNo = 0; dirtyPage == null && pageNo < this.numPages(); pageNo++){
-            HeapPage page =(HeapPage) buf.getPage(tid, 
-                                                  new HeapPageId(this.tableId, pageNo), 
-                                                  Permissions.READ_WRITE);
+        for(int pageNo = 0; pageNo < this.numPages(); pageNo++){
+            PageId pid = new HeapPageId(this.tableId, pageNo);
+            HeapPage page =(HeapPage) buf.getPage(tid, pid, Permissions.READ_WRITE);
                                                   
             if(page.getNumEmptySlots() > 0){
                 dirtyPage = page;
+                break;
             }
+            // release the writer lock, because we don't modify this page
+            else buf.unsafeReleasePage(tid, pid);
         }
 
         if(dirtyPage == null){

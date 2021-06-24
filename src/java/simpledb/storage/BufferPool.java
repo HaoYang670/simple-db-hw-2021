@@ -130,13 +130,14 @@ public class BufferPool {
     public void transactionComplete(TransactionId tid) {
         // some code goes here
         // not necessary for lab1|lab2
+        transactionComplete(tid, true);
     }
 
     /** Return true if the specified transaction has a lock on the specified page */
     public boolean holdsLock(TransactionId tid, PageId pid) {
         // some code goes here
         // not necessary for lab1|lab2
-        return lockManager.holdsLock(tid, pid);
+        return lockManager.holdsLock(tid, pid) != LockType.FREE;
     }
 
     /**
@@ -149,6 +150,27 @@ public class BufferPool {
     public void transactionComplete(TransactionId tid, boolean commit) {
         // some code goes here
         // not necessary for lab1|lab2
+
+        // transaction abort
+        for(PageId pid : pages.keySet()){
+            synchronized(pid) {
+                if((lockManager.holdsLock(tid, pid) == LockType.EXCLUSIVE) && (pages.get(pid).isDirty() != null)){
+                    // commit success, flush the dirty page
+                    if(commit) {
+                        try {
+                            this.flushPage(pid);
+                        } catch (Exception e) {
+                            e.printStackTrace();
+                        }
+                    }
+                    // discard current page state
+                    // if other transaction access the page in the future
+                    // it need to read it from disk
+                    else this.discardPage(pid);
+                }
+                lockManager.releaseLock(pid, tid);
+            }
+        }
     }
 
     /**
@@ -280,13 +302,14 @@ public class BufferPool {
     /**
      * Discards a page from the buffer pool.
      * Flushes the page to disk to ensure dirty pages are updated on disk.
+     * <p> Implement NO STEAL stragegy
      */
     private synchronized  void evictPage() throws DbException {
         // some code goes here
         // not necessary for lab1
 
         // randomly choose a not dirty page to evict
-        // if all pages are dirty, randomly choose one
+        // if all pages are dirty, throw exception
         PageId evictedPid = null;
         boolean isDirty = true;
 
@@ -296,15 +319,12 @@ public class BufferPool {
                 isDirty = false;
                 break;
             }
-            else evictedPid = pid;
         }
 
-        try {
-            if(isDirty) flushPage(evictedPid);
-            discardPage(evictedPid);
-        } catch (Exception e) {
-            e.printStackTrace();
+        if(isDirty){
+            throw new DbException("All pages in buffer are dirty");
         }
+        else discardPage(evictedPid);
     }
 
     private static LockType getLockType(Permissions perm){
