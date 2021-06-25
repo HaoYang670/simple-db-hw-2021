@@ -11,9 +11,11 @@ import simpledb.storage.PageId;
  */
 public class LockManager {
     private ConcurrentHashMap<PageId, Set<TwoPhaseLock>> allPageLocks;
+    private ConcurrentHashMap<TransactionId, Set<TwoPhaseLock>> waitForGraph;
 
     public LockManager(){
         allPageLocks = new ConcurrentHashMap<PageId, Set<TwoPhaseLock>>();
+        waitForGraph = new ConcurrentHashMap<TransactionId, Set<TwoPhaseLock>>();
     }
 
     /**
@@ -22,18 +24,26 @@ public class LockManager {
      * @param pid the page id
      * @param type the lock type
      */
-    public void getLock(TransactionId tid, PageId pid, LockType type){
+    public void getLock(TransactionId tid, PageId pid, LockType type) throws TransactionAbortedException{
+        TwoPhaseLock lock = new TwoPhaseLock(tid, type, pid);
+
         synchronized(pid){
-            TwoPhaseLock lock = new TwoPhaseLock(tid, type);
             if(holdsExpectedLock(tid, pid, type)){
                 // the transaction has acquired the lock
                 return;
             }
-            else if(type == LockType.EXCLUSIVE){ // this is a writer
+
+            if(type == LockType.EXCLUSIVE){ // this is a writer
                 // release reader lock if has acquires
                 releaseLock(pid, tid);
                 // wait for readers or writer to release the page
+                // add wait-for dependency if cannot acquire the lock directly
+                addDependency(tid, pid);
+                
                 while(getLockType(pid) != LockType.FREE){
+                    if(detectDependency(tid, tid, new HashSet<>())){
+                        throw new TransactionAbortedException();
+                    }
                     try {
                         pid.wait(); // blocking
                     } catch (Exception e) {
@@ -43,7 +53,13 @@ public class LockManager {
             }
             else { // this is a reader
                 // wait for writer to release the page
+                // add wait-for dependency if cannot acquire the lock directly
+                addDependency(tid, pid);
+
                 while(getLockType(pid) == LockType.EXCLUSIVE){
+                    if(detectDependency(tid, tid, new HashSet<>())){
+                        throw new TransactionAbortedException();
+                    }
                     try {
                         pid.wait(); // blocking
                     } catch (Exception e) {
@@ -52,10 +68,12 @@ public class LockManager {
                 }
             }
             upgradeLock(pid, lock);
+            removeDependency(tid, pid);
         }
     }
 
     /**
+     * Release all locks that the transaction holds on the page
      * @param pid the page id
      * @param tid the transaction id
      */
@@ -145,6 +163,65 @@ public class LockManager {
                 return LockType.EXCLUSIVE;
             }
             return LockType.SHARED;
+        }
+    }
+
+    /**
+     * Add wait-for dependency from tid to all lock holders of pid
+     * @param tid the transaction id
+     * @param pid the page id
+     */
+    private void addDependency(TransactionId tid, PageId pid){
+        if(allPageLocks.containsKey(pid)){
+            if(!waitForGraph.containsKey(tid)){
+                waitForGraph.put(tid, new HashSet<TwoPhaseLock>());
+            }
+            waitForGraph.get(tid).addAll(allPageLocks.get(pid));
+        }
+    }
+
+    /**
+     * If there is a direct wait-for dependency from start to end, remove it
+     * @param start The id of start transaction 
+     * @param end The id of end transaction
+     */
+    private void removeDependency(TransactionId tid,PageId pid){
+        synchronized(tid){
+            if(waitForGraph.containsKey(tid)){
+                waitForGraph.get(tid).removeIf(x -> x.pid == pid);
+            }
+        }
+    }
+
+    public void removeAllDependency(TransactionId tid){
+        synchronized(tid){
+            waitForGraph.remove(tid);
+            for(TransactionId start : waitForGraph.keySet()){
+                waitForGraph.get(start).removeIf(x -> x.tid == tid);
+            }
+        }
+    }
+
+
+
+    /**
+     * Detected whether there is a wait-for path between two transactions
+     * @param start the id of start transaction
+     * @param end the id of end transaction
+     * @param detected all start transactions that have been detected
+     * @return
+     */
+    private boolean detectDependency(TransactionId start, TransactionId end, Set<TransactionId> detected){
+        synchronized(waitForGraph){
+            if(!waitForGraph.containsKey(start)) return false;
+            if(detected.contains(start)) return false;
+            
+            detected.add(start);
+            for(TwoPhaseLock lock : waitForGraph.get(start)){
+                if(lock.tid == end) return true;
+                if(detectDependency(lock.tid, end, detected)) return true;
+            }
+            return false;
         }
     }
 }

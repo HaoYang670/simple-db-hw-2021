@@ -151,7 +151,6 @@ public class BufferPool {
         // some code goes here
         // not necessary for lab1|lab2
 
-        // transaction abort
         for(PageId pid : pages.keySet()){
             synchronized(pid) {
                 if((lockManager.holdsLock(tid, pid) == LockType.EXCLUSIVE) && (pages.get(pid).isDirty() != null)){
@@ -171,6 +170,7 @@ public class BufferPool {
                 lockManager.releaseLock(pid, tid);
             }
         }
+        lockManager.removeAllDependency(tid);
     }
 
     /**
@@ -292,11 +292,18 @@ public class BufferPool {
         table.writePage(pages.get(pid));
     }
 
-    /** Write all pages of the specified transaction to disk.
+    /** 
+     * Write all pages of the specified transaction to disk.
      */
     public synchronized  void flushPages(TransactionId tid) throws IOException {
         // some code goes here
         // not necessary for lab1|lab2
+        for(PageId pid : pages.keySet()){
+            if((lockManager.holdsLock(tid, pid) == LockType.EXCLUSIVE) && (pages.get(pid).isDirty() != null)){
+                this.flushPage(pid);
+            }
+        }
+
     }
 
     /**
