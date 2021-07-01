@@ -153,7 +153,7 @@ public class BufferPool {
 
         for(PageId pid : pages.keySet()){
             synchronized(pid) {
-                if((lockManager.holdsLock(tid, pid) == LockType.EXCLUSIVE) && (pages.get(pid).isDirty() != null)){
+                if((lockManager.holdsLock(tid, pid) == LockType.EXCLUSIVE)){
                     // commit success, flush the dirty page
                     if(commit) {
                         try {
@@ -165,12 +165,14 @@ public class BufferPool {
                     // discard current page state
                     // if other transaction access the page in the future
                     // it need to read it from disk
-                    else this.discardPage(pid);
+                    else {
+                        this.discardPage(pid);
+                    }
                 }
                 lockManager.releaseLock(pid, tid);
             }
         }
-        lockManager.removeAllDependency(tid);
+        //lockManager.removeAllDependency(tid);
     }
 
     /**

@@ -10,6 +10,8 @@ import simpledb.storage.PageId;
  * LockManager manages all page locks in this buffer pool
  */
 public class LockManager {
+    // the threshold for waiting for a lock (ms)
+    private static int THRESHOLD = 100;
     private ConcurrentHashMap<PageId, Set<TwoPhaseLock>> allPageLocks;
     private ConcurrentHashMap<TransactionId, Set<TwoPhaseLock>> waitForGraph;
 
@@ -36,39 +38,52 @@ public class LockManager {
             if(type == LockType.EXCLUSIVE){ // this is a writer
                 // release reader lock if has acquires
                 releaseLock(pid, tid);
+
                 // wait for readers or writer to release the page
                 // add wait-for dependency if cannot acquire the lock directly
-                addDependency(tid, pid);
+                //addDependency(tid, pid);
                 
                 while(getLockType(pid) != LockType.FREE){
+                    /*
                     if(detectDependency(tid, tid, new HashSet<>())){
                         throw new TransactionAbortedException();
                     }
+                    */
+                    long startTime = System.currentTimeMillis();
                     try {
-                        pid.wait(); // blocking
+                        pid.wait(2*THRESHOLD); // blocking
                     } catch (Exception e) {
                         e.printStackTrace();
+                    }
+                    if(System.currentTimeMillis() - startTime > THRESHOLD){
+                        throw new TransactionAbortedException();
                     }
                 }
             }
             else { // this is a reader
                 // wait for writer to release the page
                 // add wait-for dependency if cannot acquire the lock directly
-                addDependency(tid, pid);
+                //addDependency(tid, pid);
 
                 while(getLockType(pid) == LockType.EXCLUSIVE){
+                    /*
                     if(detectDependency(tid, tid, new HashSet<>())){
                         throw new TransactionAbortedException();
                     }
+                    */
+                    long startTime = System.currentTimeMillis();
                     try {
-                        pid.wait(); // blocking
+                        pid.wait(2*THRESHOLD); // blocking
                     } catch (Exception e) {
                         e.printStackTrace();
+                    }
+                    if(System.currentTimeMillis() - startTime > THRESHOLD){
+                        throw new TransactionAbortedException();
                     }
                 }
             }
             upgradeLock(pid, lock);
-            removeDependency(tid, pid);
+            //removeDependency(tid, pid);
         }
     }
 
