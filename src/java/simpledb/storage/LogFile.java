@@ -460,6 +460,31 @@ public class LogFile {
             synchronized(this) {
                 preAppend();
                 // some code goes here
+                if(! tidToFirstLogRecord.containsKey(tid.getId())){
+                    return;
+                }
+
+                raf.seek(currentOffset - 8);
+                long offset = raf.readLong(); // the start offset of the latest log
+
+                // scan all logs reversly
+                while (offset > tidToFirstLogRecord.get(tid.getId())){
+                    raf.seek(offset);
+
+                    if(raf.readInt() == UPDATE_RECORD && raf.readLong() == tid.getId()){
+                        Page beforeImage = readPageData(raf);
+                        PageId pid = beforeImage.getId();
+                        DbFile file = Database.getCatalog().getDatabaseFile(pid.getTableId());
+                        Database.getBufferPool().discardPage(pid);
+                        file.writePage(beforeImage);
+                        
+                    }
+                    // set offset to the start of next latest log
+                    raf.seek(offset-8);
+                    offset = raf.readLong();
+                }
+
+                raf.seek(currentOffset);
             }
         }
     }

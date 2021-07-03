@@ -28,7 +28,6 @@ public class LockManager {
      */
     public void getLock(TransactionId tid, PageId pid, LockType type) throws TransactionAbortedException{
         TwoPhaseLock lock = new TwoPhaseLock(tid, type, pid);
-
         synchronized(pid){
             if(holdsExpectedLock(tid, pid, type)){
                 // the transaction has acquired the lock
@@ -96,12 +95,21 @@ public class LockManager {
         
         synchronized(pid){
             if(!allPageLocks.containsKey(pid)) return;
-
             allPageLocks.get(pid).removeIf(lock -> lock.tid == tid);
             if(allPageLocks.get(pid).isEmpty()){
                 // wake up all sleep threads, because this page is free now
                 pid.notifyAll();
             }
+        }
+    }
+
+    /**
+     * release all locks a transaction hold
+     * @param tid the transaction id
+     */
+    public void releaseAllLock(TransactionId tid){
+        for(PageId pid : allPageLocks.keySet()){
+            releaseLock(pid, tid);
         }
     }
 
@@ -171,7 +179,7 @@ public class LockManager {
     private LockType getLockType(PageId pid){
         synchronized(pid){
             if(!allPageLocks.containsKey(pid) || allPageLocks.get(pid).isEmpty())
-            return LockType.FREE;
+                return LockType.FREE;
             
             for(TwoPhaseLock lock : allPageLocks.get(pid)){
                 if(lock.type == LockType.EXCLUSIVE)
