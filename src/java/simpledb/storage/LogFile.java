@@ -2,6 +2,7 @@
 package simpledb.storage;
 
 import simpledb.common.Database;
+import simpledb.transaction.Transaction;
 import simpledb.transaction.TransactionId;
 import simpledb.common.Debug;
 
@@ -464,7 +465,7 @@ public class LogFile {
                     return;
                 }
 
-                raf.seek(currentOffset - 8);
+                raf.seek(raf.getFilePointer() - 8);
                 long offset = raf.readLong(); // the start offset of the latest log
 
                 // scan all logs reversly
@@ -512,6 +513,62 @@ public class LogFile {
             synchronized (this) {
                 recoveryUndecided = false;
                 // some code goes here
+                // seek the position of checkpoint 
+                raf.seek(0);
+
+                tidToFirstLogRecord.clear();
+                final long checkpointOffset = raf.readLong();
+                // analysis the dirty transaction
+                if(checkpointOffset != -1){
+                    raf.seek(checkpointOffset);
+                    raf.readInt(); // read type
+                    raf.readLong(); // read tid
+                    final int numberDirty = raf.readInt();
+                    for(int i=0; i<numberDirty; i++){
+                        tidToFirstLogRecord.put(raf.readLong(), raf.readLong());
+                    }
+                    raf.readLong(); // read start offset
+                }
+                
+                // offset now point to the first redo log
+                currentOffset = raf.getFilePointer();
+                // Let's Redo!
+                while(currentOffset < raf.length()){
+                    final int type = raf.readInt();
+                    final TransactionId tid = new TransactionId(raf.readLong());
+                    if(type == BEGIN_RECORD){
+                        tidToFirstLogRecord.put(tid.getId(), currentOffset);
+                    }
+                    else if(type == COMMIT_RECORD){
+                        tidToFirstLogRecord.remove(tid.getId());
+                    }
+                    else if(type == ABORT_RECORD){
+                        final long offset = raf.getFilePointer();
+                        raf.seek(currentOffset);
+                        rollback(tid);
+                        raf.seek(offset);
+                        tidToFirstLogRecord.remove(tid.getId());
+                    }
+                    else if(type == UPDATE_RECORD){
+                        readPageData(raf); // read before image
+                        final Page afterImage = readPageData(raf);
+                        final PageId pid = afterImage.getId();
+                        final DbFile file = Database.getCatalog().getDatabaseFile(pid.getTableId());
+                        file.writePage(afterImage);
+                        Database.getBufferPool().discardPage(pid);
+                    }
+                    else{
+                        System.out.println("unhandled log type");
+                    }
+                    raf.readLong(); // read start offset
+                    currentOffset = raf.getFilePointer();
+                }
+
+                // Undo!!
+                for(long tidNum : tidToFirstLogRecord.keySet()){
+                    rollback(new TransactionId(tidNum));
+                }
+                tidToFirstLogRecord.clear();
             }
          }
     }

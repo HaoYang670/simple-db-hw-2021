@@ -17,6 +17,15 @@ public class TransactionId implements Serializable {
         myid = counter.getAndIncrement();
     }
 
+	/**
+	 * Create a transaction id with user's given id
+	 * This constructor should be only used when doing system recover
+	 * @param id
+	 */
+	public TransactionId(long id){
+		myid = id;
+	}
+
     public long getId() {
         return myid;
     }
